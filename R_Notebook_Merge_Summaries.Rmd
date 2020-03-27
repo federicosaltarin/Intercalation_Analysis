@@ -1,0 +1,83 @@
+---
+title: "Merge results for analysis"
+output: html_notebook
+author: "Federico Saltarin"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+---
+<br>
+<br>
+<br>
+<br>
+First we import all libraries
+```{r}
+library(dplyr)
+library(data.table)
+library(stringr)
+library(tcltk)
+```
+<br>
+<br>
+Here you can specify the name of your output CSV file 
+```{r}
+output_file = "Summary_Merged.csv"
+```
+<br>
+<br>
+Here you can interactively choose the directory in which all your results are stored and it will create a list of all .csv files
+```{r}
+directory =  tk_choose.dir(caption = "Select summaries folder: ")
+filenames = list.files(path= directory , pattern="*.csv")
+```
+<br>
+<br>
+Now all files are merged into a single dataframe and the "Slice" column is modified to remove all spaces and make it more readable.
+Moreover, 3 new columns are created:
+-Well containing the well name 
+-Fov containing the specific number of the FOV
+-Slice_N that specifies the slice per every row
+This information are taken from the "Slice" column with regular expression pattern matching.
+```{r}
+fullpath = file.path(directory,filenames)
+dataset = do.call("rbind",lapply(fullpath,FUN=function(files){ read.csv(files)}))
+
+dataset = dataset %>% mutate(Slice = str_replace_all(Slice, fixed(" "), "") ) %>% 
+                      mutate(Slice = gsub('[(]', "_",  Slice)) %>% 
+                      mutate(Slice = gsub('[)]', "_",  Slice)) %>%
+                      mutate(Slice = gsub("- ", "",  Slice)) %>% 
+                      mutate(Slice = gsub(" ", "_",  Slice)) %>% 
+                      mutate(Well = str_extract(string = Slice, pattern = (".*(?=_fld)"))) %>% 
+                      mutate(Fov = as.numeric(str_extract(string =  Slice, pattern = ("(?<=fld).*(?=wv)"))) ) %>% 
+                      mutate( Slice_N = as.numeric(str_extract(string =  dataset$Slice, pattern = ("(?<=time).*(?=-)"))))
+```
+<br>
+<br>
+Now you are asked to select your Experimental Description File (contatining paired well-condition description)
+Then the "Condition" column is added to the dataset, based on the information given on your selected file.
+```{r}
+Data_Exp_Descr = read.csv(tk_choose.files(caption = "Select experimental description file: "))
+dataset$Cond_ID = max.col(sapply(Data_Exp_Descr$Well, grepl, dataset$Slice))
+dataset$Condition = Data_Exp_Descr$Condition[dataset$Cond_ID]
+```
+<br>
+<br>
+A new dataframe is generated, removing not needed columns and modifying the "Well" columns removing the dash.
+```{r}
+Data = dataset %>%  select(-c(Mean,Cond_ID)) %>%  
+                    rename(Slice_ID = Slice,  Slice = Slice_N) %>% 
+                    mutate(Well = gsub("-", "", Well))
+```
+<br>
+<br>
+Here we check the "head" of the resulting dataframe
+```{r}
+head(Data)
+
+```
+
+At this point your data is ready to be plotted and here we save the dataframe as a CSV file (using the name specified before)
+```{r}
+ write.csv(Data, output_file)
+```
+
+
+
