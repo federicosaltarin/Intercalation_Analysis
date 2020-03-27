@@ -1,0 +1,217 @@
+---
+title: "Diapedesis timeplapse quantification"
+output: html_notebook
+Author: "Federico Saltarin"
+Date: '`r format(Sys.Date(), "%B %d, %Y")`'
+---
+As this is an R-Notebook you can run the single chunks or you can also do run all after setting your parameters and get immediately your final results. After running you will also get a html format that shows you the code along with the final results (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+<br> 
+<br>
+<br>
+First we define all the needed libraries
+```{r}
+library(dplyr)
+library(data.table)
+library(ggplot2)
+# library(plotly)
+library(tcltk)
+```
+<br>
+<br>
+
+Then, here you can set some initial parameters:
+- "Time_Res" is your specific time resolution in minutes.
+- "Filtering" to "yes" or "no" if you want/don't want to filter data.
+- "Removing" to "yes" or "no" if you want/don't want to remove data-points
+
+```{r}
+Time_Res = 5  
+Filtering = "yes" 
+Removing = "no"  
+```
+<br>
+<br>
+
+Then you choose the file with the results to analyze. 
+To the original data 2 new columns are added:
+- A unique identifier (Pasting Well adn FOV)
+- Real time column based on slice and your time resolution 
+
+```{r}
+Data <- read.csv(tk_choose.files(caption = "Select results file: "))
+
+Data <- Data %>% 
+  mutate(Unique_ID = paste0(Well, Fov)) %>% 
+  mutate(Time = (Slice * Time_Res)-Time_Res)
+```
+<br>
+<br>
+And here we show the "head" of your data
+
+```{r}
+head(Data)
+```
+```{r}
+paste("Your Data has ",length(Data$Slice_ID)," rows")
+```
+<br>
+<br>
+If you don't need any filtering the "filtered" data will be identical to the source.
+Otherwise, if you set "Filtering" to "yes", you are asked to choose your file with a list of conditions that you would like to plot. Then the data will be filtered on your selected conditions.
+
+```{r}
+if(Filtering == "no"){
+  Data_Filtered <- Data
+  paste("Your Filtered Data has ",length(Data_Filtered$Slice_ID)," rows")
+}else if(Filtering == "yes") {
+  Data_Cond <- read.csv(tk_choose.files(caption = "Select Condition List file: "))
+  Plot_Cond = unique(Data_Cond$Condition)
+  Data_Filtered <- Data %>%
+    filter(Condition %in% Plot_Cond)
+  paste("Your Filtered Data has ",length(Data_Filtered$Slice_ID)," rows")
+} else{
+  print("Check Filtering value!")
+}
+```
+<br>
+<br>
+If you don't need to remove datapoints (like spcific FOV in specific Wells) the "filtered" data will be identical to the source.
+Otherwise, if you set "Removing" to "yes", you are asked to choose your file with a list of data points that you would like to remove (Well and FOV columns). Then the data will be removed from the analysis.
+
+```{r}
+if(Removing == "no"){
+  paste("Your Filtered Data has ",length(Data_Filtered$Slice_ID)," rows")
+} else if(Removing == "yes"){
+  Data_Remove <- read.csv(tk_choose.files(caption = "Select Remove List file: "))
+  Data_Remove <- Data_Remove %>%
+  mutate(ID = paste0(Well, Fov))
+  Remove = Data_Remove$ID
+  Data_Filtered <- Data_Filtered %>%
+     filter(!Unique_ID %in% Remove)
+  paste("Your Filtered Data has ",length(Data_Filtered$Slice_ID)," rows")
+}else{
+  print("Check Removing value!")
+}
+```
+<br>
+<br>
+Here you can define a specific set of datapoints (in minutes) to plot from your dataset. Application is for example, boxplots.
+Then a new dataframe Data_Timepoints is created, based on your specified Timepoints. 
+
+```{r}
+Timepoints = c(0,30,60,90,120)
+
+Data_Timepoints = Data_Filtered %>% 
+                  filter(Time %in% Timepoints) %>% 
+                  arrange(Time)  %>% 
+                  select(-c(Total.Area, Average.Size)) %>% 
+                  mutate(Time = as.factor(Time))
+
+paste("Your Data Timepoints has ",length(Data_Timepoints$Slice_ID)," rows")
+```
+<br>
+<br>
+Then all the plots are created.
+- Events_Per_Well shows you the curves of events over time of single FOV. Also the average is shown. Plots are also grouped per Condition. Here you can check, for example, the technical reproducibility of your data.
+- Events_Per_Condition shows you the average curves of events over time for all the selected conditions. Plots are also grouped per Condition. Here you can compare, for example, your condition dynamics or overall differences.
+- Area_Perc_Per_Condition is quite similar to Events_Per_Condition but plotting the area isted of the number of events
+- Events_Boxplot shows you the same information as Events_Per_Condition but as boxplots and for only the selected Timepoints
+
+```{r}
+
+#Plot number of Events per well over time + average curve, facet per well
+Events_Per_Well <- ggplot(Data_Filtered, aes(x = Time, y = Count, color = Unique_ID))+ 
+  geom_smooth(aes(group = Unique_ID), size = 0.3, se=F, span = 0.3)+
+  geom_smooth(aes(group = Well), se=F, size = 0.7, color = "red", span = 0.3)+
+  facet_wrap(Condition ~ Well)+
+  theme_bw()+
+   theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "none")+
+  xlab('Time (min)')+
+  ylab('Intercalation events')
+
+
+#Plot number of Events per well over time + average curve
+Events_Per_Condition <- ggplot(Data_Filtered, aes(x = Time, y = Count, color = Condition))+ 
+  geom_smooth(se=F, size = 0.7, span = 0.3)+
+  theme_bw()+
+  xlab('Time (min)')+
+  ylab('Intercalation events')
+
+
+# Events_Per_Condition_2 <- ggplot(Data_Filtered, aes(x = Time, y = Count))+ 
+#   #geom_line(aes(group = Unique_ID), size = 0.3, se=F, span = 0.3)+
+#   geom_smooth(aes(group = Condition), color = "red", se=F, size = 0.7, span = 0.3)+
+#   #geom_smooth(lwd = 1, data=Data_Avg_Count, aes(x = Time, y = Avg_Count), color = 'red', size = 2)+
+#   #facet_grid("Condition")+ 
+#   theme_bw()+
+#   xlab('Time (min)')+
+#   ylab('Intercalation events')
+
+
+#Plot percentage area of Events per well over time + average curve
+Area_Perc_Per_Condition <- ggplot(Data_Filtered, aes(x = Time, y = X.Area, color = Well))+ 
+  geom_line(aes(group = Unique_ID), size = 0.3)+
+  geom_smooth(aes(group = Condition), se=F, size = 0.7, color = "red", span = 0.3)+
+  facet_grid("Condition")+
+  theme_bw()+
+  xlab('Time (min)')+
+  ylab('% Area')
+
+
+#Define conditions to plot in boxplots
+#Cond_Unique = unique(Data_Timepoints$Condition)
+#compare = list( c(Cond_Unique[1],Cond_Unique[2]), c(Cond_Unique[1],Cond_Unique[3]),  c(Cond_Unique[2],Cond_Unique[4]),  c(Cond_Unique[3],Cond_Unique[4]) )
+
+
+Events_Boxplot <- ggplot(Data_Timepoints , aes(x = Condition, y = Count)) +
+  geom_boxplot(position=position_dodge(0.8), aes(fill = Condition), alpha=0.7,notch=F) +
+  geom_jitter(position=position_dodge(0.8), aes(group = Condition), alpha=0.6)+
+  facet_wrap("Time", nrow = 1)+
+  theme_bw()+
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank())+
+  xlab('Time (min)')+
+  ylab('Intercalation events')
+
+
+```
+<br>
+<br>
+Now we plot all the generated plots
+
+```{r}
+Events_Per_Well
+Events_Per_Condition
+#Area_Perc_Per_Condition
+Events_Boxplot
+```
+<br>
+<br>
+In the end, we create a folder for the plots and save all the plots generated in PDF format.
+
+```{r}
+
+# dir.create("../Plots")
+# setwd("../Plots")
+# 
+# 
+# Plots_List = list(Events_Per_Well,
+#                   Events_Per_Condition_Mixed,
+#                   Area_Perc_Per_Condition,
+#                   Events_Boxplot)
+# 
+# names(Plots_List) <- c("Events_Per_Well",
+#                        "Events_Per_Condition_Mixed",
+#                        "Area_Perc_Per_Condition",
+#                        "Events_Boxplot")
+# lapply(names(Plots_List),
+#        function(x)
+#          ggsave(filename=paste(x,".pdf",sep=""), height = 7, width = 15, plot=Plots_List[[x]]))
+```
+
+
+
