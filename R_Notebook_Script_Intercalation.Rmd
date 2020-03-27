@@ -1,8 +1,8 @@
 ---
 title: "Diapedesis timeplapse quantification"
 output: html_notebook
-Author: "Federico Saltarin"
-Date: '`r format(Sys.Date(), "%B %d, %Y")`'
+author: "Federico Saltarin"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
 ---
 As this is an R-Notebook you can run the single chunks or you can also do run all after setting your parameters and get immediately your final results. After running you will also get a html format that shows you the code along with the final results (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
 <br> 
