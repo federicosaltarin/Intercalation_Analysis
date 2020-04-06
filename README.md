@@ -7,3 +7,12 @@ The Mege Summaries script combines different single CSV file in a single one con
 
 Analysis and plotting of the results is then done with the Script Intercalation file. Plotting is done per fov (possible to check technical consistency of data) and then per condition to compare experimental conditions. 
 Main representation is for the time series: number or area of diplacement events over time represented by smoothed curves or boxplots.
+
+The 2 notebooks require this libraries:
+
+- dplyr
+- data.table
+- stringr
+- tcltk
+- ggplot2
+- tcltk
